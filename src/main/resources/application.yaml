@@ -1,0 +1,106 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: analytics-service
+
+  # Cấu hình Database (PostgreSQL)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/analytics_db
+    username: postgres
+    password: loi114
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 60000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+
+  # Cấu hình Kafka Consumer
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    consumer:
+      group-id: "analytics-group" # Group ID cho consumer
+      auto-offset-reset: "earliest"
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.tlcn.*" # An toàn hơn là dùng "*"
+        spring.json.use.type.headers: false # Dựa vào type của method trong @KafkaListener
+    topics:
+      order-completed: "order-completed-topic" # Topic lắng nghe đơn hàng hoàn thành
+
+  # Cấu hình Security (OAuth2 Resource Server)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:4321/realms/ecommerce-realm} # Địa chỉ realm của Keycloak
+
+# Cấu hình Eureka Client
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    enabled: true
+  instance:
+    prefer-ip-address: true
+  instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}
+  ip-address: ${spring.cloud.client.ip-address}
+
+# Cấu hình Actuator để giám sát
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.cloud: DEBUG
+    com.netflix.discovery: DEBUG
+    com.tlcn: DEBUG
+    org.keycloak: DEBUG
+
+kafka:
+  idempotency:
+    ttl-hours: 24
+
+analytics:
+  cache:
+    dashboard-ttl-minutes: 10
+    sales-ttl-minutes: 10
+  kafka:
+    retry:
+      max-attempts: 3
+      interval-ms: 1000
+  segmentation:
+    vip-threshold: 5000000
+    new-customer-days: 30
+  jobs:
+    daily-rollup-cron: "0 0 1 * * ?"
+    growth-calculation-cron: "0 30 1 * * ?"
+    customer-segment-cron: "0 0 2 * * ?"
